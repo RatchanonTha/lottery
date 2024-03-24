@@ -5,16 +5,16 @@ pragma solidity >=0.8.2 <0.9.0;
 contract lottery is CommitReveal{
     address owner;
     uint public stage;
-    uint numParticipants;
-    uint pot;
+    uint public numParticipants;
+    uint public pot;
     mapping (uint => address) public UserAddr;
-    uint[] allChoice;
+    uint[] public allChoice;
     mapping (uint => uint) public candidate; //new index is what old index
     mapping (address => bool) public commitments;
-    uint[3] time;
-    uint numCommit = 0;
-    uint numReveal = 0;
-    uint timeStart = 0;
+    uint[3] public time;
+    uint public numCommit = 0;
+    uint public numReveal = 0;
+    uint public timeStart = 0;
 
     constructor(uint T1,uint T2,uint T3, uint N) {
         owner = msg.sender;
@@ -58,7 +58,7 @@ contract lottery is CommitReveal{
         }
 
         revealAnswer(bytes32(answer),bytes32(salt));
-        UserAddr[numReveal++] = msg.sender;
+        UserAddr[numReveal] = msg.sender;
         allChoice.push(answer);
         numReveal++;
         if (numReveal == 1) {
