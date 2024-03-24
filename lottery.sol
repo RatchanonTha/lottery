@@ -7,9 +7,9 @@ contract lottery is CommitReveal{
     uint public stage;
     uint numParticipants;
     uint pot;
-    mapping (address => uint) public choice;
+    mapping (uint => address) public UserAddr;
     uint[] allChoice;
-    uint CurrentIndex = 0;
+    mapping (uint => uint) public candidate; //new index is what old index
     mapping (address => bool) public commitments;
     uint[3] time;
     uint numCommit = 0;
@@ -58,7 +58,7 @@ contract lottery is CommitReveal{
         }
 
         revealAnswer(bytes32(answer),bytes32(salt));
-        choice[msg.sender] = CurrentIndex++;
+        UserAddr[numReveal++] = msg.sender;
         allChoice.push(answer);
         numReveal++;
         if (numReveal == 1) {
@@ -74,13 +74,51 @@ contract lottery is CommitReveal{
         require(msg.sender == owner, "Only contract owner can call this function");
         require(stage == 3, "Not state 3 now");
         if(block.timestamp - timeStart > time[2]) {
-            stage = 3;
+            stage = 4;
             timeStart = 0;
             require(stage == 2, "Stage 3 now");
         }
+        uint FinalValue;
+        uint answer;
+        uint CurrentIndex = 0;
+        bool legit = false;
+
+        for(uint i=0; i < numReveal; i++) {
+            if(allChoice[i] >= 0 && allChoice[i] <= 999) {
+                legit = true;
+                if(FinalValue == 0) {
+                    FinalValue = allChoice[i];
+                    continue;
+                }
+                FinalValue = FinalValue ^ allChoice[i];
+                candidate[CurrentIndex++] = i;
+            }
+        }
+
+        address payable OwnerAcc = payable(owner);
+        answer = uint(getHash(bytes32(FinalValue))) % CurrentIndex;
+        if(legit) {
+            address payable winner = payable(UserAddr[candidate[answer]]);
+            uint amount = 1 ether * numCommit * 98 / 100000;
+            winner.transfer(amount);
+            amount = 1 ether * numCommit * 2 / 100000;
+            OwnerAcc.transfer(amount);
+        } else {
+            OwnerAcc.transfer(pot);
+        }
     }
 
+    function UserWithdraw() public payable {
+        if(block.timestamp - timeStart > time[2] && stage == 3) {
+            stage = 4;
+        }
+        require(stage == 4, "Not state 3 now");
+        require(commitments[msg.sender], "Already withdraw or Didn't commit");
 
+        address payable user = payable(msg.sender);
+        user.transfer(0.001 ether);
+        commitments[msg.sender] = false;
+    }
 
 
 }
