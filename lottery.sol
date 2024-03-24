@@ -15,6 +15,7 @@ contract lottery is CommitReveal{
     uint public numCommit = 0;
     uint public numReveal = 0;
     uint public timeStart = 0;
+    bool public GaveReward = false;
 
     constructor(uint T1,uint T2,uint T3, uint N) {
         owner = msg.sender;
@@ -29,10 +30,8 @@ contract lottery is CommitReveal{
         require(stage == 1, "Not state 1 now");
         require(numCommit < numParticipants, "No room for you");
         require(msg.value == 0.001 ether);
-        if(timeStart != 0 && block.timestamp - timeStart > time[0]) {
-            stage = 2;
-            timeStart = 0;
-            require(stage == 1, "Stage 2 now");
+        if(timeStart != 0) { // if not the first commit and time's out
+            require(block.timestamp - timeStart < time[0], "Time's up for commiting");
         }
 
         pot += msg.value;
@@ -44,44 +43,45 @@ contract lottery is CommitReveal{
         } 
         else if (numCommit == numParticipants) {
             stage = 2;
-            timeStart = 0;
+            timeStart = block.timestamp;
         }
          
     }
 
     function UserReveal(uint answer,uint salt) public {
-        require(stage == 2, "Not state 2 now");
-        if(timeStart != 0 && block.timestamp - timeStart > time[1]) {
-            stage = 3;
+        if(block.timestamp - timeStart > time[0] && stage == 1) {
+            require(block.timestamp - timeStart < time[0]+time[1], "Time's up for revealing"); //if already passed stage 1,is it still in state2?
+            stage = 2;
             timeStart = block.timestamp;
-            require(stage == 2, "Stage 3 now");
         }
+        require(stage == 2, "Not state 2 now");
+        require(block.timestamp - timeStart < time[1], "Time's up for revealing");
 
         revealAnswer(bytes32(answer),bytes32(salt));
         UserAddr[numReveal] = msg.sender;
         allChoice.push(answer);
         numReveal++;
-        if (numReveal == 1) {
-            timeStart = block.timestamp;
-        }
-        else if (numReveal == numParticipants) {
+        if (numReveal == numCommit) {
             stage = 3;
             timeStart = block.timestamp;
         }
     }
 
     function findWinner() public payable{
+        if(((numCommit != 0 && block.timestamp - timeStart > time[0] + time[1]) && stage == 1) || ((numCommit != 0 && block.timestamp - timeStart > time[1]) && stage == 2)) {
+            require(block.timestamp - timeStart < time[0]+time[1]+time[2], "Time's up for finding winner"); //if already passed stage 1 and stage2,is it still in state3?
+            stage = 3;
+            timeStart = block.timestamp;
+        } 
+
         require(msg.sender == owner, "Only contract owner can call this function");
         require(stage == 3, "Not state 3 now");
-        if(block.timestamp - timeStart > time[2]) {
-            stage = 4;
-            timeStart = 0;
-            require(stage == 2, "Stage 3 now");
-        }
+        require(block.timestamp - timeStart < time[2], "Time's up for finding winner");
         uint FinalValue;
         uint answer;
         uint CurrentIndex = 0;
         bool legit = false;
+        uint amount;
 
         for(uint i=0; i < numReveal; i++) {
             if(allChoice[i] >= 0 && allChoice[i] <= 999) {
@@ -96,23 +96,24 @@ contract lottery is CommitReveal{
         }
 
         address payable OwnerAcc = payable(owner);
-        answer = uint(getHash(bytes32(FinalValue))) % CurrentIndex;
         if(legit) {
+            answer = uint(getHash(bytes32(FinalValue))) % CurrentIndex;
             address payable winner = payable(UserAddr[candidate[answer]]);
-            uint amount = 1 ether * numCommit * 98 / 100000;
+            amount = 1 ether * numCommit * 98 / 100000;
             winner.transfer(amount);
             amount = 1 ether * numCommit * 2 / 100000;
             OwnerAcc.transfer(amount);
         } else {
             OwnerAcc.transfer(pot);
         }
+        GaveReward = true;
     }
 
     function UserWithdraw() public payable {
-        if(block.timestamp - timeStart > time[2] && stage == 3) {
+        if((((numCommit != 0 && block.timestamp - timeStart > time[0] + time[1] + time[2]) && stage == 1) || ((numCommit != 0 && block.timestamp - timeStart > time[1] + time[2]) && stage == 2)) || ((numCommit != 0 && block.timestamp - timeStart > time[2]) && stage == 3)) {
             stage = 4;
         }
-        require(stage == 4, "Not state 3 now");
+        require(stage == 4, "Not state 4 now");
         require(commitments[msg.sender], "Already withdraw or Didn't commit");
 
         address payable user = payable(msg.sender);
