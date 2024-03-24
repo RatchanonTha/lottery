@@ -3,11 +3,12 @@ import "./CommitReveal.sol";
 pragma solidity >=0.8.2 <0.9.0;
 
 contract lottery is CommitReveal{
-    address owner;
+    address public owner;
     uint public stage;
     uint public numParticipants;
     uint public pot;
-    mapping (uint => address) public UserAddr;
+    mapping (uint => address) public UserAddr; //store user that reveal
+    address[] public CommitAddr; //store user that commit
     uint[] public allChoice;
     mapping (uint => uint) public candidate; //new index is what old index
     mapping (address => bool) public commitments;
@@ -16,6 +17,8 @@ contract lottery is CommitReveal{
     uint public numReveal = 0;
     uint public timeStart = 0;
     bool public GaveReward = false;
+    uint public CurrentIndex = 0;
+    bool legit = false;
 
     constructor(uint T1,uint T2,uint T3, uint N) {
         owner = msg.sender;
@@ -24,6 +27,28 @@ contract lottery is CommitReveal{
         time[0] = T1;
         time[1] = T2;
         time[2] = T3;
+    }
+
+    function resetValue() public {
+        for(uint i=0; i < numReveal; i++) {
+            UserAddr[i] = address(0);
+            allChoice[i] = 0;
+        }
+        for(uint j=0; j < CurrentIndex; j++) {
+            candidate[j] = 0;
+        }
+        for(uint k=0; k < numCommit; k++) {
+            commitments[CommitAddr[k]] = false;
+            CommitAddr[k] = address(0);
+        }
+        CurrentIndex = 0;
+        numCommit = 0;
+        numReveal = 0;
+        timeStart = 0;
+        GaveReward = false;
+        pot = 0;
+        stage = 1;
+        legit = false;
     }
 
     function UserCommit(uint _value, uint salt) public payable {
@@ -37,6 +62,7 @@ contract lottery is CommitReveal{
         pot += msg.value;
         commit(getSaltedHash(bytes32(_value),bytes32(salt)));
         commitments[msg.sender] = true;
+        CommitAddr.push(msg.sender);
         numCommit++;
         if (numCommit == 1) {
             timeStart = block.timestamp;
@@ -79,8 +105,6 @@ contract lottery is CommitReveal{
         require(block.timestamp - timeStart < time[2], "Time's up for finding winner");
         uint FinalValue;
         uint answer;
-        uint CurrentIndex = 0;
-        bool legit = false;
         uint amount;
 
         for(uint i=0; i < numReveal; i++) {
@@ -107,6 +131,7 @@ contract lottery is CommitReveal{
             OwnerAcc.transfer(pot);
         }
         GaveReward = true;
+        resetValue();
     }
 
     function UserWithdraw() public payable {
@@ -119,6 +144,10 @@ contract lottery is CommitReveal{
         address payable user = payable(msg.sender);
         user.transfer(0.001 ether);
         commitments[msg.sender] = false;
+        numCommit = numCommit - 1;
+        if(numCommit == 0) {
+            resetValue();
+        }
     }
 
 
